@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nebula Station - Acesso Restrito</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --accent: #a855f7;
+            --text: #f8fafc;
+            --error: #ef4444;
+            --success: #22c55e;
+            --input-bg: rgba(0, 0, 0, 0.4);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+
+        body {
+            background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text);
+            overflow: hidden;
+        }
+
+        /* Estrelas ao fundo */
+        .stars {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: url('https://www.transparenttextures.com/patterns/stardust.png');
+            opacity: 0.9;
+            z-index: -1;
+        }
+
+        /* Card de Login */
+        .login-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 2.5rem;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        h1 { text-align: center; letter-spacing: 5px; font-weight: 200; margin-bottom: 0.5rem; }
+        .subtitle { text-align: center; color: #94a3b8; font-size: 0.8rem; margin-bottom: 2rem; text-transform: uppercase; }
+
+        .input-group { margin-bottom: 1.2rem; }
+        label { display: block; font-size: 0.7rem; color: #cbd5e1; margin-bottom: 0.5rem; letter-spacing: 1px; }
+
+        .password-wrapper { position: relative; display: flex; align-items: center; }
+        input { 
+            width: 100%; padding: 12px; background: var(--input-bg); 
+            border: 1px solid #334155; border-radius: 8px; color: white; outline: none; 
+        }
+        input:focus { border-color: var(--primary); }
+        
+        .toggle-password { position: absolute; right: 12px; cursor: pointer; color: #64748b; }
+
+        button {
+            width: 100%; padding: 12px; margin-top: 1rem;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            border: none; border-radius: 8px; color: white; font-weight: bold;
+            cursor: pointer; transition: 0.3s;
+        }
+        button:hover { filter: brightness(1.2); transform: translateY(-1px); }
+
+        /* Feedback visual */
+        #feedback { text-align: center; margin-top: 1rem; font-size: 0.85rem; height: 1rem; }
+        .shake { animation: shake 0.4s ease-in-out; border-color: var(--error) !important; }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+
+        /* Alerta de Invasor */
+        #alarmOverlay {
+            position: fixed; top:0; left:0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.9); z-index: 100; opacity: 0; pointer-events: none;
+            transition: 0.5s;
+        }
+        #alarmOverlay.active { opacity: 1; pointer-events: all; animation: pulseRed 0.5s infinite; }
+        @keyframes pulseRed { 0% { background: rgba(50,0,0,0.9); } 50% { background: rgba(150,0,0,0.9); } 100% { background: rgba(50,0,0,0.9); } }
+
+        .big-x { font-size: 120px; color: var(--error); font-weight: bold; margin-bottom: 1rem; filter: drop-shadow(0 0 15px red); }
+        .countdown { font-size: 4rem; font-weight: bold; margin-top: 1rem; }
+
+        /* Utilitários */
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div class="stars"></div>
+
+    <div id="alarmOverlay" class="hidden">
+        <div class="big-x">✕</div>
+        <h2 style="color: var(--error); letter-spacing: 3px;">INVASOR DETECTADO</h2>
+        <p>Iniciando protocolo de eliminação...</p>
+        <div class="countdown" id="countDisplay">5</div>
+    </div>
+
+    <div class="login-card" id="mainCard">
+        <div id="loginContent">
+            <h1>NEBULA</h1>
+            <p class="subtitle">Acesso ao Terminal Lunar</p>
+
+            <div class="input-group">
+                <label>ID TRIPULANTE</label>
+                <input type="text" id="user" placeholder="nome">
+            </div>
+
+            <div class="input-group">
+                <label>CÓDIGO</label>
+                <div class="password-wrapper">
+                    <input type="password" id="pass" placeholder="••••••••">
+                    <span class="toggle-password" onclick="togglePass()">👁</span>
+                </div>
+            </div>
+
+            <button onclick="checkLogin()">ENTRAR</button>
+            <div id="feedback"></div>
+        </div>
+
+        <div id="successContent" class="hidden" style="text-align: center;">
+            <div style="font-size: 50px; color: var(--success);">✓</div>
+            <h2 style="margin-bottom: 1rem;">ACESSO CONCEDIDO</h2>
+            <p>Bem-vindo à Estação, <span id="welcomeName"></span>.</p>
+            <button onclick="location.reload()" style="background: #334155; margin-top: 2rem;">LOGOUT</button>
+        </div>
+    </div>
+
+    <script>
+        let attempts = 0;
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // --- MOTOR DE SOM (Sintetizador Web Audio) ---
+        function playSound(type) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'success') {
+                // Som de "Porta Espacial/Sucesso" (Frequência subindo)
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.5);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.5);
+            } 
+            else if (type === 'error') {
+                // Som de "Erro Curto"
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+            }
+            else if (type === 'alarm') {
+                // Sirene repetitiva
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.4);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.4);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.4);
+            }
+        }
+
+        function togglePass() {
+            const p = document.getElementById('pass');
+            p.type = p.type === 'password' ? 'text' : 'password';
+        }
+
+        function checkLogin() {
+            const u = document.getElementById('user').value;
+            const p = document.getElementById('pass').value;
+            const fb = document.getElementById('feedback');
+            const card = document.getElementById('mainCard');
+
+            if (p === "1234") {
+                playSound('success');
+                document.getElementById('loginContent').classList.add('hidden');
+                document.getElementById('successContent').classList.remove('hidden');
+                document.getElementById('welcomeName').innerText = u;
+            } else {
+                attempts++;
+                playSound('error');
+                card.classList.add('shake');
+                setTimeout(() => card.classList.remove('shake'), 400);
+
+                if (attempts >= 3) {
+                    startElimination();
+                } else {
+                    fb.innerHTML = `<span style="color:var(--error)">Credenciais incorretas!</span>`;
+                }
+            }
+        }
+
+        function startElimination() {
+            const overlay = document.getElementById('alarmOverlay');
+            const countEl = document.getElementById('countDisplay');
+            document.getElementById('mainCard').classList.add('hidden');
+            overlay.classList.remove('hidden');
+            overlay.classList.add('active');
+
+            let timer = 5;
+            // Toca o primeiro som de alarme
+            playSound('alarm');
+            const interval = setInterval(() => {
+                timer--;
+                countEl.innerText = timer;
+                playSound('alarm'); // Toca o alarme a cada segundo
+
+                if (timer <= 0) {
+                    clearInterval(interval);
+                    // "Desliga" a tela
+                    document.body.innerHTML = `
+                        <div style="background:black; width:100vw; height:100vh; display:flex; align-items:center; justify-content:center; color:#0f0; font-family:monospace;">
+                            > SINAL PERDIDO. TERMINAL DESATIVADO.
+			<div style="background:black; width:10vw; height:50vh; display:flex; align-items:center; justify-content:center; color:#0f0; font-family:monospace;">
+				> recarregue a página
+                            
+                        </div>`;
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
