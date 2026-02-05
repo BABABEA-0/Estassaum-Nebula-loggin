@@ -1,4 +1,4 @@
-Tranporte para estação Nebula: https://bababea-0.github.io/Estassaum-Nebula-loggin/
+Nave para estação Nebula: https://bababea-0.github.io/Estassaum-Nebula-loggin/
 
 
 
@@ -66,4 +66,5 @@ Sistema de Defesa: Sequência de "eliminação" do terminal caso ocorram múltip
 
 
 Design Responsivo: O cartão de login se adapta ao tamanho da tela.
+
 
